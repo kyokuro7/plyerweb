@@ -10,36 +10,35 @@
 @media (prefers-color-scheme:dark){:root{--bg:#12162a;--ink:#e8ebf7;--mute:#9aa3c4;--line:#2a3150;--card:#1a1f38;--hot:#ff5c9d;--hot-ink:#12162a}}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 "Segoe UI",system-ui,sans-serif}
-main{max-width:960px;margin:0 auto;padding:28px 18px 60px}
-h1{font-size:2rem;margin:0 0 4px;letter-spacing:-.02em}
-.sub{color:var(--mute);margin:0 0 22px}
-.bar{display:flex;gap:8px;flex-wrap:wrap}
-input[type=url]{flex:1 1 280px;padding:12px 14px;border:1.5px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink);font:inherit}
-button,.btn{padding:12px 18px;border:0;border-radius:10px;background:var(--hot);color:var(--hot-ink);font:inherit;font-weight:600;cursor:pointer}
-button.alt,.btn.alt{background:transparent;color:var(--ink);border:1.5px solid var(--line)}
+main{max-width:980px;margin:0 auto;padding:24px 16px 60px}
+h1{font-size:1.9rem;margin:0 0 4px;letter-spacing:-.02em}
+.sub{color:var(--mute);margin:0 0 18px}
+.bar,.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+input[type=url]{flex:1 1 260px;padding:12px 14px;border:1.5px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink);font:inherit}
+button,.btn{padding:11px 16px;border:0;border-radius:10px;background:var(--hot);color:var(--hot-ink);font:inherit;font-weight:600;cursor:pointer;display:inline-block}
+.alt{background:transparent!important;color:var(--ink)!important;border:1.5px solid var(--line)!important}
 button:disabled{opacity:.5;cursor:wait}
 :focus-visible{outline:3px solid var(--hot);outline-offset:2px}
-#status{margin:14px 0;color:var(--mute);min-height:1.5em}
-#status.err{color:var(--hot)}
-.grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px;margin-top:8px}
-@media(max-width:720px){.grid{grid-template-columns:1fr}}
-.panel{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px}
+#status{margin:12px 0;color:var(--mute);min-height:1.5em}#status.err{color:var(--hot)}
+.grid{display:grid;grid-template-columns:minmax(0,360px) minmax(0,1fr);gap:18px}
+@media(max-width:760px){.grid{grid-template-columns:1fr}}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px}
 .panel h2{font-size:1.05rem;margin:0 0 10px}
 canvas{width:100%;height:auto;border-radius:10px;background:#000;display:block}
-.assets{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:8px}
-.asset{border:2px solid var(--line);border-radius:10px;padding:4px;background:var(--bg);cursor:pointer;text-align:center;font-size:.7rem;color:var(--mute);overflow:hidden}
-.asset img{width:100%;aspect-ratio:1;object-fit:contain;border-radius:6px;display:block}
-.asset[aria-pressed=true]{border-color:var(--hot)}
-.row{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+input[type=range]{flex:1;accent-color:var(--hot)}
+.slots{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px}
+.slot{border:1.5px solid var(--line);border-radius:10px;padding:6px;text-align:center;font-size:.8rem}
+.slot img{width:100%;aspect-ratio:9/16;object-fit:cover;border-radius:6px;display:block;margin-bottom:6px}
+.slot .btn{padding:6px 10px;font-size:.8rem}
 details{margin-top:14px;color:var(--mute);font-size:.85rem}
-pre{white-space:pre-wrap;word-break:break-all;max-height:240px;overflow:auto;background:var(--bg);padding:10px;border-radius:8px}
+pre{white-space:pre-wrap;word-break:break-all;max-height:220px;overflow:auto;background:var(--bg);padding:10px;border-radius:8px}
 [hidden]{display:none!important}
 </style>
 </head>
 <body>
 <main>
   <h1>Preset Player</h1>
-  <p class="sub">Tempel link preset Alight Creative, lalu ganti foto di dalamnya.</p>
+  <p class="sub">Tempel link preset Alight Creative, putar, lalu ganti fotonya.</p>
   <div class="bar">
     <input id="link" type="url" placeholder="https://alightcreative.com/am/share/..." aria-label="Link preset">
     <button id="go">Muat preset</button>
@@ -48,141 +47,211 @@ pre{white-space:pre-wrap;word-break:break-all;max-height:240px;overflow:auto;bac
 
   <section class="grid" id="view" hidden>
     <div class="panel">
-      <h2 id="title">Pratinjau</h2>
-      <canvas id="cv" width="640" height="640"></canvas>
-    </div>
-    <div class="panel">
-      <h2>Foto di dalam preset</h2>
-      <div class="assets" id="assets"></div>
-      <p id="hint" class="sub" style="margin:10px 0 0">Pilih satu foto, lalu ganti dengan fotomu.</p>
-      <div class="row">
-        <label class="btn" id="pickLbl" hidden>Ganti foto<input id="file" type="file" accept="image/*" hidden></label>
-        <button class="alt" id="dl" hidden>Unduh preset baru</button>
+      <canvas id="cv" width="720" height="1280"></canvas>
+      <div class="row" style="margin-top:10px">
+        <button id="play">Putar</button>
+        <input id="seek" type="range" min="0" max="1000" value="0" aria-label="Posisi">
+        <span id="time" class="sub" style="margin:0">0.0s</span>
       </div>
     </div>
+    <div class="panel">
+      <h2 id="title">Foto</h2>
+      <div class="slots" id="slots"></div>
+      <div class="row" style="margin-top:14px"><button class="alt" id="dl" hidden>Unduh preset baru</button></div>
+      <p class="sub" style="margin:12px 0 0;font-size:.85rem">Pratinjau ini hanya meniru posisi, skala, rotasi, transparansi, fade, getar, dan musik. Efek lain belum dirender, jadi tampilannya tidak persis sama dengan di Alight Motion.</p>
+    </div>
   </section>
-
-  <details id="dbg" hidden><summary>Info teknis paket</summary><pre id="dbgOut"></pre></details>
+  <details id="dbg" hidden><summary>Info teknis</summary><pre id="dbgOut"></pre></details>
 </main>
 
 <script>
 const $ = (id) => document.getElementById(id);
-const IMG = /\.(png|jpe?g|webp)$/i;
-let zip, assets = [], selected = null, thumbImg = null, baseName = "preset";
+const kids = (n) => Array.from(n.children);
+const ch = (n, tag) => kids(n).find((c) => c.tagName === tag);
+const nums = (s) => String(s).split(",").map(Number);
+let zip, doc, W = 720, H = 1280, total = 1000, layers = [], imgs = {}, audioLayer = null, aud = new Audio();
+let t = 0, playing = false, last = 0, baseName = "preset";
 
-function status(msg, err) { const s = $("status"); s.textContent = msg; s.className = err ? "err" : ""; }
+const status = (m, err) => { $("status").textContent = m; $("status").className = err ? "err" : ""; };
 
-// Ambil nilai pertama dari JSON yang key-nya cocok pola
-function pick(obj, re, test = (v) => typeof v === "string") {
-  let out;
-  (function walk(o) {
-    if (out || !o || typeof o !== "object") return;
-    for (const [k, v] of Object.entries(o)) {
-      if (re.test(k) && test(v)) { out = v; return; }
-      walk(v);
+/* ---------- easing & interpolasi ---------- */
+function bez(x1, y1, x2, y2, x) {
+  let lo = 0, hi = 1, s = x;
+  for (let i = 0; i < 24; i++) {
+    const cx = 3 * x1 * s * (1 - s) ** 2 + 3 * x2 * s * s * (1 - s) + s ** 3;
+    if (cx < x) lo = s; else hi = s; s = (lo + hi) / 2;
+  }
+  return 3 * y1 * s * (1 - s) ** 2 + 3 * y2 * s * s * (1 - s) + s ** 3;
+}
+const elastic = (x) => x <= 0 ? 0 : x >= 1 ? 1 : 2 ** (-10 * x) * Math.sin((10 * x - .75) * 2 * Math.PI / 3) + 1;
+function ease(e, x) {
+  if (!e) return x;
+  const a = e.split(" ");
+  if (a[0] === "cubicBezier") return bez(+a[1], +a[2], +a[3], +a[4], x);
+  if (a.includes("elastic")) return elastic(x);
+  return x;
+}
+// nilai properti di posisi p (0..1 dari durasi layer)
+function val(n, p) {
+  if (!n) return null;
+  const k = kids(n).filter((c) => c.tagName === "kf")
+    .map((c) => ({ t: +c.getAttribute("t"), v: nums(c.getAttribute("v")), e: c.getAttribute("e") }))
+    .sort((a, b) => a.t - b.t);
+  if (!k.length) return n.hasAttribute("value") ? nums(n.getAttribute("value")) : null;
+  if (p <= k[0].t) return k[0].v;
+  if (p >= k[k.length - 1].t) return k[k.length - 1].v;
+  const i = k.findIndex((q) => q.t > p), a = k[i - 1], b = k[i];
+  const f = ease(b.e, (p - a.t) / (b.t - a.t));
+  return a.v.map((x, j) => x + (b.v[j] - x) * f);
+}
+const prop = (el, name, p) => { const n = kids(el).find((c) => c.getAttribute("name") === name); const v = val(n, p); return v ? v[0] : 0; };
+
+/* ---------- render satu frame ---------- */
+function draw() {
+  const c = $("cv").getContext("2d");
+  c.setTransform(1, 0, 0, 1, 0, 0); c.globalAlpha = 1;
+  c.fillStyle = "#000"; c.fillRect(0, 0, W, H);
+  for (const L of layers) {
+    if (t < L.s || t >= L.e || !L.img) continue;
+    const p = (t - L.s) / (L.e - L.s), sec = (t - L.s) / 1000, dur = (L.e - L.s) / 1000;
+    const tr = ch(L.el, "transform") || L.el;
+    const find = (tag) => ch(tr, tag) || ch(L.el, tag);
+    const loc = val(find("location"), p) || [W / 2, H / 2];
+    const sc = val(find("scale"), p) || [1, 1];
+    let rot = (val(find("rotation"), p) || [0])[0];
+    let op = (val(find("opacity"), p) || [1])[0]; if (op > 1) op /= 100;
+    let dx = 0, dy = 0;
+    for (const fx of L.fx) {
+      const id = fx.getAttribute("id") || "";
+      if (id.endsWith("oscillate3")) {
+        const o = prop(fx, "mag", p) * Math.sin(2 * Math.PI * prop(fx, "freq", p) * sec + prop(fx, "phase", p));
+        const a = prop(fx, "angle", p) * Math.PI / 180; dx += Math.cos(a) * o; dy += Math.sin(a) * o;
+      } else if (id.endsWith("swing2")) {
+        const a1 = prop(fx, "a1", p), a2 = prop(fx, "a2", p);
+        rot += a1 + (a2 - a1) * (.5 + .5 * Math.sin(2 * Math.PI * prop(fx, "freq", p) * sec + prop(fx, "phase", p)));
+      } else if (id.endsWith("effects.fade")) {
+        const i = prop(fx, "inTime", p) || 1e-9, o = prop(fx, "outTime", p) || 1e-9;
+        op *= Math.max(0, Math.min(1, sec / i, (dur - sec) / o));
+      }
     }
-  })(obj);
-  return out;
+    const im = L.img, r = Math.max(W / im.naturalWidth, H / im.naturalHeight);
+    const dw = im.naturalWidth * r, dh = im.naturalHeight * r;
+    c.save();
+    c.globalAlpha = Math.max(0, Math.min(1, op));
+    c.translate(loc[0] + dx, loc[1] + dy); c.rotate(rot * Math.PI / 180); c.scale(sc[0], sc[1] ?? sc[0]);
+    c.beginPath(); c.rect(-W / 2, -H / 2, W, H); c.clip();
+    c.drawImage(im, -dw / 2, -dh / 2, dw, dh);
+    c.restore();
+  }
+  $("seek").value = Math.round(t / total * 1000);
+  $("time").textContent = (t / 1000).toFixed(1) + "s";
 }
 
-async function getJson(url) {
-  const r = await fetch(url);
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(j.error || "Gagal (" + r.status + ")");
-  return j;
+/* ---------- pemutaran ---------- */
+function syncAudio() {
+  if (!audioLayer) return;
+  const pos = (audioLayer.inT + (t - audioLayer.s)) / 1000;
+  if (pos >= 0) try { aud.currentTime = pos; } catch (e) {}
 }
+function tick(now) {
+  if (!playing) return;
+  t += now - last; last = now;
+  if (t >= total) { t = 0; syncAudio(); }
+  draw(); requestAnimationFrame(tick);
+}
+function setPlaying(on) {
+  playing = on; $("play").textContent = on ? "Jeda" : "Putar";
+  if (on) { last = performance.now(); syncAudio(); aud.play().catch(() => {}); requestAnimationFrame(tick); } else aud.pause();
+}
+$("play").onclick = () => setPlaying(!playing);
+$("seek").oninput = (e) => { t = e.target.value / 1000 * total; syncAudio(); draw(); };
 
-function drawBase() {
-  const cv = $("cv"), c = cv.getContext("2d");
-  c.fillStyle = "#000"; c.fillRect(0, 0, cv.width, cv.height);
-  if (thumbImg) {
-    const s = Math.min(cv.width / thumbImg.width, cv.height / thumbImg.height);
-    const w = thumbImg.width * s, h = thumbImg.height * s;
-    c.drawImage(thumbImg, (cv.width - w) / 2, (cv.height - h) / 2, w, h);
+/* ---------- muat preset ---------- */
+const loadImg = (src) => new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = no; i.src = src; });
+async function getJson(u) { const r = await fetch(u); const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || "Gagal (" + r.status + ")"); return j; }
+async function openZip(buf) {
+  try { return await JSZip.loadAsync(buf); } catch (e) {
+    const b = new Uint8Array(buf); let i = 0;
+    while (i < b.length - 4 && !(b[i] === 80 && b[i + 1] === 75 && b[i + 2] === 3 && b[i + 3] === 4)) i++;
+    return await JSZip.loadAsync(b.slice(i));
   }
 }
-
-function loadImg(src) {
-  return new Promise((ok, no) => { const i = new Image(); i.crossOrigin = "anonymous"; i.onload = () => ok(i); i.onerror = no; i.src = src; });
-}
-
-function renderAssets() {
-  const box = $("assets"); box.innerHTML = "";
-  assets.forEach((a, i) => {
-    const b = document.createElement("button");
-    b.className = "asset"; b.type = "button";
-    b.setAttribute("aria-pressed", selected === i);
-    b.innerHTML = '<img alt=""><span></span>';
-    b.querySelector("img").src = a.url;
-    b.querySelector("span").textContent = a.name.split("/").pop();
-    b.onclick = () => { selected = i; renderAssets(); $("pickLbl").hidden = false; $("hint").textContent = "Terpilih: " + a.name.split("/").pop(); };
-    box.appendChild(b);
-  });
-}
+const mediaName = (u) => (u || "").replace("amproj:", "");
 
 async function load() {
   const link = $("link").value.trim();
   if (!link) return status("Tempel link preset dulu.", true);
-  $("go").disabled = true; $("view").hidden = true; $("dbg").hidden = true;
+  $("go").disabled = true; $("view").hidden = true; setPlaying(false);
   try {
-    status("Membaca info preset…");
-    const detail = await getJson("/api/detail?url=" + encodeURIComponent(link));
-    const title = pick(detail, /title|name/i) || "Preset";
-    const thumb = pick(detail, /thumb|image|cover|preview/i, (v) => typeof v === "string" && /^https?:/.test(v));
-    baseName = title.replace(/[^\w\-]+/g, "_");
-    $("title").textContent = title;
-    thumbImg = thumb ? await loadImg(thumb).catch(() => null) : null;
-
-    status("Mengunduh paket preset…");
+    status("Mengunduh preset…");
     const r = await fetch("/api/download?url=" + encodeURIComponent(link));
     if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || "Gagal mengunduh (" + r.status + ")");
-    zip = await JSZip.loadAsync(await r.arrayBuffer());
-
-    assets = []; selected = null;
+    zip = await openZip(await r.arrayBuffer());
     const names = Object.keys(zip.files).filter((n) => !zip.files[n].dir);
-    for (const n of names.filter((n) => IMG.test(n))) {
-      const blob = await zip.files[n].async("blob");
-      assets.push({ name: n, url: URL.createObjectURL(blob) });
+    const xmlName = names.find((n) => n.endsWith(".xml"));
+    if (!xmlName) throw new Error("File proyek (.xml) tidak ditemukan di paket.");
+    doc = new DOMParser().parseFromString(await zip.files[xmlName].async("string"), "text/xml");
+    const sc = doc.querySelector("scene");
+    W = +sc.getAttribute("width"); H = +sc.getAttribute("height"); total = +sc.getAttribute("totalTime");
+    $("cv").width = W; $("cv").height = H;
+    baseName = (sc.getAttribute("title") || "preset").replace(/[^\w\-]+/g, "_");
+    $("title").textContent = sc.getAttribute("title") || "Foto";
+
+    status("Menyiapkan gambar dan musik…");
+    imgs = {}; layers = []; audioLayer = null; const order = [];
+    for (const el of kids(sc)) {
+      const s = +el.getAttribute("startTime"), e = +el.getAttribute("endTime");
+      if (el.tagName === "audio") {
+        const nm = mediaName(el.getAttribute("src"));
+        if (zip.files[nm]) { aud.src = URL.createObjectURL(new Blob([await zip.files[nm].async("arraybuffer")], { type: "audio/mpeg" })); audioLayer = { s, inT: +el.getAttribute("inTime") || 0 }; }
+      } else if (el.tagName === "shape" && el.getAttribute("fillType") === "media" && el.getAttribute("fillImage")) {
+        const nm = mediaName(el.getAttribute("fillImage"));
+        if (!imgs[nm] && zip.files[nm]) { imgs[nm] = await loadImg(URL.createObjectURL(await zip.files[nm].async("blob"))); order.push(nm); }
+        layers.push({ el, s, e, nm, img: imgs[nm], fx: kids(el).filter((c) => c.tagName === "effect") });
+      }
     }
-    $("dbgOut").textContent = "Detail API:\n" + JSON.stringify(detail, null, 2).slice(0, 1500) + "\n\nIsi paket (" + names.length + " file):\n" + names.join("\n");
+    const fxCount = {}; doc.querySelectorAll("effect").forEach((f) => { const k = f.getAttribute("id").split(".").pop(); fxCount[k] = (fxCount[k] || 0) + 1; });
+    $("dbgOut").textContent = "Layer foto dirender: " + layers.length + "\nEfek di preset (jumlah):\n" + JSON.stringify(fxCount, null, 1) + "\n\nIsi paket:\n" + names.join("\n");
     $("dbg").hidden = false;
-    $("view").hidden = false; $("pickLbl").hidden = true; $("dl").hidden = true;
-    $("hint").textContent = assets.length ? "Pilih satu foto, lalu ganti dengan fotomu." : "Tidak ada foto di paket ini. Cek “Info teknis paket”.";
-    drawBase(); renderAssets();
-    status("Preset dimuat.");
+    renderSlots(order);
+    t = 0; $("view").hidden = false; $("dl").hidden = true; draw();
+    status("Preset dimuat. Tekan Putar.");
   } catch (e) { status(e.message, true); }
   $("go").disabled = false;
 }
-
 $("go").onclick = load;
 $("link").addEventListener("keydown", (e) => e.key === "Enter" && load());
 
-$("file").onchange = async (e) => {
-  const f = e.target.files[0]; if (!f || selected === null) return;
-  const a = assets[selected];
-  const ext = a.name.split(".").pop().toLowerCase();
+/* ---------- ganti foto ---------- */
+function renderSlots(order) {
+  const box = $("slots"); box.innerHTML = "";
+  order.forEach((nm, i) => {
+    const d = document.createElement("div"); d.className = "slot";
+    d.innerHTML = '<img alt=""><label class="btn alt">Ganti foto ' + (i + 1) + '<input type="file" accept="image/*" hidden></label>';
+    d.querySelector("img").src = imgs[nm].src;
+    d.querySelector("input").onchange = (e) => replace(nm, e.target.files[0], d);
+    box.appendChild(d);
+  });
+}
+async function replace(nm, file, slot) {
+  if (!file) return;
+  const old = imgs[nm], ext = nm.split(".").pop().toLowerCase();
   const mime = ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : "image/jpeg";
-  // Ubah ke format & ukuran asli aset supaya preset tetap valid
-  const orig = await loadImg(a.url);
-  const c = document.createElement("canvas"); c.width = orig.width; c.height = orig.height;
-  const x = c.getContext("2d"), np = await loadImg(URL.createObjectURL(f));
-  const s = Math.max(c.width / np.width, c.height / np.height);
-  x.drawImage(np, (c.width - np.width * s) / 2, (c.height - np.height * s) / 2, np.width * s, np.height * s);
-  const blob = await new Promise((ok) => c.toBlob(ok, mime, 0.92));
-  zip.file(a.name, blob);
-  a.url = URL.createObjectURL(blob);
-  // Pratinjau: tampilkan foto baru di kanvas
-  thumbImg = await loadImg(a.url); drawBase();
-  renderAssets(); $("dl").hidden = false;
+  const np = await loadImg(URL.createObjectURL(file));
+  const cv = document.createElement("canvas"); cv.width = old.naturalWidth; cv.height = old.naturalHeight;
+  const s = Math.max(cv.width / np.width, cv.height / np.height);
+  cv.getContext("2d").drawImage(np, (cv.width - np.width * s) / 2, (cv.height - np.height * s) / 2, np.width * s, np.height * s);
+  const blob = await new Promise((ok) => cv.toBlob(ok, mime, 0.92));
+  zip.file(nm, blob);
+  const im = await loadImg(URL.createObjectURL(blob));
+  imgs[nm] = im; layers.forEach((L) => { if (L.nm === nm) L.img = im; });
+  slot.querySelector("img").src = im.src; $("dl").hidden = false; draw();
   status("Foto diganti. Unduh preset baru untuk diimpor ke Alight Motion.");
-  e.target.value = "";
-};
-
+}
 $("dl").onclick = async () => {
   status("Menyusun file…");
   const blob = await zip.generateAsync({ type: "blob", compression: "DEFLATE" });
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob); a.download = baseName + ".alightmotion"; a.click();
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = baseName + ".alightmotion"; a.click();
   status("File diunduh.");
 };
 </script>
