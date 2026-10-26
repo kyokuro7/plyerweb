@@ -58,7 +58,7 @@ pre{white-space:pre-wrap;word-break:break-all;max-height:220px;overflow:auto;bac
       <h2 id="title">Foto</h2>
       <div class="slots" id="slots"></div>
       <div class="row" style="margin-top:14px"><button class="alt" id="dl" hidden>Unduh preset baru</button></div>
-      <p class="sub" style="margin:12px 0 0;font-size:.85rem">Pratinjau ini hanya meniru posisi, skala, rotasi, transparansi, fade, getar, dan musik. Efek lain belum dirender, jadi tampilannya tidak persis sama dengan di Alight Motion.</p>
+      <p class="sub" style="margin:12px 0 0;font-size:.85rem">Pratinjau ini meniru posisi, skala, rotasi, transparansi, fade, getar, overlay video, waves, ubin (tile), koreksi warna sederhana, dan musik. Efek lain (blur, dll.) belum dirender, jadi tampilannya tidak persis sama dengan di Alight Motion.</p>
     </div>
   </section>
   <details id="dbg" hidden><summary>Info teknis</summary><pre id="dbgOut"></pre></details>
@@ -107,20 +107,59 @@ function val(n, p) {
 const prop = (el, name, p) => { const n = kids(el).find((c) => c.getAttribute("name") === name); const v = val(n, p); return v ? v[0] : 0; };
 
 /* ---------- render satu frame ---------- */
+const BLEND = { "linear-dodge": "lighter", add: "lighter", screen: "screen", multiply: "multiply", overlay: "overlay" };
+const oc = document.createElement("canvas"), o2 = document.createElement("canvas");
+// ambil nilai properti efek yang namanya cocok pola (nama asli belum pasti, lihat "Info teknis")
+function num(fx, re, p, def) {
+  const n = kids(fx).find((c) => re.test(c.getAttribute("name") || "")); if (!n) return def;
+  const v = val(n, p); return v ? v[0] : def;
+}
+function ripple(fx, p, sec, srcCv) {
+  let amp = num(fx, /amp|mag|str|inten|height|size/i, p, 0); if (Math.abs(amp) < .01) return srcCv;
+  if (Math.abs(amp) <= 2) amp *= 30;
+  const fr = num(fx, /freq|wave|count|ring/i, p, 8), ph = num(fx, /phase|evol|speed|time/i, p, 0) + sec * 6;
+  const cx = W / 2, cy = H / 2, k = 2 * Math.PI * fr / Math.max(W, H);
+  const A = srcCv.getContext("2d").getImageData(0, 0, W, H).data, D = new ImageData(W, H), B = D.data;
+  for (let y = 0, i = 0; y < H; y++) for (let x = 0; x < W; x++, i += 4) {
+    const dx = x - cx, dy = y - cy, r = Math.sqrt(dx * dx + dy * dy) || 1, o = amp * Math.sin(r * k - ph);
+    const sx = Math.min(W - 1, Math.max(0, Math.round(x + dx / r * o))), sy = Math.min(H - 1, Math.max(0, Math.round(y + dy / r * o))), j = (sy * W + sx) * 4;
+    B[i] = A[j]; B[i + 1] = A[j + 1]; B[i + 2] = A[j + 2]; B[i + 3] = A[j + 3];
+  }
+  o2.getContext("2d").putImageData(D, 0, 0); return o2;
+}
+const o3 = document.createElement("canvas");
+function tile(fx, p, srcCv) {
+  const sc = num(fx, /^scale$/i, p, 1); if (sc >= .999 || sc < .03) return srcCv;
+  const mn = kids(fx).find((c) => c.getAttribute("name") === "mirror"), mir = mn && mn.getAttribute("value") === "true";
+  const g = o3.getContext("2d"), tw = W * sc, th = H * sc, nx = Math.ceil(.5 / sc) + 1;
+  g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, W, H);
+  for (let i = -nx; i <= nx; i++) for (let j = -nx * 2; j <= nx * 2; j++) {
+    g.save(); g.translate(W / 2 + i * tw, H / 2 + j * th); g.scale(mir && (i & 1) ? -1 : 1, mir && (j & 1) ? -1 : 1);
+    g.drawImage(srcCv, -tw / 2, -th / 2, tw, th); g.restore();
+  }
+  return o3;
+}
+function syncVideo(L, active) {
+  const v = L.video; if (!v) return;
+  if (!active) { if (!v.paused) v.pause(); return; }
+  const want = (L.inT + (t - L.s)) / 1000;
+  if (playing) { if (v.paused) { v.currentTime = want; v.play().catch(() => {}); } else if (Math.abs(v.currentTime - want) > .25) v.currentTime = want; }
+  else { if (!v.paused) v.pause(); if (Math.abs(v.currentTime - want) > .03) v.currentTime = want; }
+}
 function draw() {
-  const c = $("cv").getContext("2d");
-  c.setTransform(1, 0, 0, 1, 0, 0); c.globalAlpha = 1;
+  const c = $("cv").getContext("2d"), x = oc.getContext("2d");
+  c.setTransform(1, 0, 0, 1, 0, 0); c.globalAlpha = 1; c.globalCompositeOperation = "source-over"; c.filter = "none";
   c.fillStyle = "#000"; c.fillRect(0, 0, W, H);
   for (const L of layers) {
-    if (t < L.s || t >= L.e || !L.img) continue;
+    const active = t >= L.s && t < L.e; syncVideo(L, active);
+    const src = L.video || L.img; if (!active || !src) continue;
+    const sw = L.video ? L.video.videoWidth : src.naturalWidth, sh = L.video ? L.video.videoHeight : src.naturalHeight;
+    if (!sw) continue;
     const p = (t - L.s) / (L.e - L.s), sec = (t - L.s) / 1000, dur = (L.e - L.s) / 1000;
-    const tr = ch(L.el, "transform") || L.el;
-    const find = (tag) => ch(tr, tag) || ch(L.el, tag);
-    const loc = val(find("location"), p) || [W / 2, H / 2];
-    const sc = val(find("scale"), p) || [1, 1];
-    let rot = (val(find("rotation"), p) || [0])[0];
-    let op = (val(find("opacity"), p) || [1])[0]; if (op > 1) op /= 100;
-    let dx = 0, dy = 0;
+    const tr = ch(L.el, "transform") || L.el, find = (tag) => ch(tr, tag) || ch(L.el, tag);
+    const loc = val(find("location"), p) || [W / 2, H / 2], sc = val(find("scale"), p) || [1, 1];
+    let rot = (val(find("rotation"), p) || [0])[0], op = (val(find("opacity"), p) || [1])[0]; if (op > 1) op /= 100;
+    let dx = 0, dy = 0, bright = 1, sat = 1, rip = [], til = [];
     for (const fx of L.fx) {
       const id = fx.getAttribute("id") || "";
       if (id.endsWith("oscillate3")) {
@@ -132,16 +171,21 @@ function draw() {
       } else if (id.endsWith("effects.fade")) {
         const i = prop(fx, "inTime", p) || 1e-9, o = prop(fx, "outTime", p) || 1e-9;
         op *= Math.max(0, Math.min(1, sec / i, (dur - sec) / o));
-      }
+      } else if (id.endsWith("circularripple2")) rip.push(fx);
+      else if (id.endsWith("effects.tile")) til.push(fx);
+      else if (id.endsWith("effects.exposure")) { const v = num(fx, /expo|ev|value|amount/i, p, 0); bright *= Math.abs(v) <= 5 ? 2 ** v : 1 + v / 100; }
+      else if (id.endsWith("effects.lift")) { const v = num(fx, /lift|value|amount|shadow/i, p, 0); bright *= Math.abs(v) <= 1 ? 1 + v : 1 + v / 100; }
+      else if (id.endsWith("satvib")) { const v = num(fx, /sat/i, p, 0); sat *= Math.abs(v) <= 1 ? 1 + v : v / 100; }
     }
-    const im = L.img, r = Math.max(W / im.naturalWidth, H / im.naturalHeight);
-    const dw = im.naturalWidth * r, dh = im.naturalHeight * r;
-    c.save();
-    c.globalAlpha = Math.max(0, Math.min(1, op));
-    c.translate(loc[0] + dx, loc[1] + dy); c.rotate(rot * Math.PI / 180); c.scale(sc[0], sc[1] ?? sc[0]);
-    c.beginPath(); c.rect(-W / 2, -H / 2, W, H); c.clip();
-    c.drawImage(im, -dw / 2, -dh / 2, dw, dh);
-    c.restore();
+    x.setTransform(1, 0, 0, 1, 0, 0); x.clearRect(0, 0, W, H); x.save();
+    x.translate(loc[0] + dx, loc[1] + dy); x.rotate(rot * Math.PI / 180); x.scale(sc[0], sc[1] ?? sc[0]);
+    const r = Math.max(W / sw, H / sh), dw = sw * r, dh = sh * r;
+    x.beginPath(); x.rect(-W / 2, -H / 2, W, H); x.clip(); x.drawImage(src, -dw / 2, -dh / 2, dw, dh); x.restore();
+    let out = oc; for (const fx of til) out = tile(fx, p, out); for (const fx of rip) out = ripple(fx, p, sec, out);
+    c.save(); c.globalAlpha = Math.max(0, Math.min(1, op));
+    c.globalCompositeOperation = BLEND[L.blend] || "source-over";
+    c.filter = (bright !== 1 || sat !== 1) ? `brightness(${Math.max(0, bright)}) saturate(${Math.max(0, sat)})` : "none";
+    c.drawImage(out, 0, 0); c.restore();
   }
   $("seek").value = Math.round(t / total * 1000);
   $("time").textContent = (t / 1000).toFixed(1) + "s";
@@ -161,7 +205,7 @@ function tick(now) {
 }
 function setPlaying(on) {
   playing = on; $("play").textContent = on ? "Jeda" : "Putar";
-  if (on) { last = performance.now(); syncAudio(); aud.play().catch(() => {}); requestAnimationFrame(tick); } else aud.pause();
+  if (on) { last = performance.now(); syncAudio(); aud.play().catch(() => {}); requestAnimationFrame(tick); } else { aud.pause(); draw(); }
 }
 $("play").onclick = () => setPlaying(!playing);
 $("seek").oninput = (e) => { t = e.target.value / 1000 * total; syncAudio(); draw(); };
@@ -193,25 +237,33 @@ async function load() {
     doc = new DOMParser().parseFromString(await zip.files[xmlName].async("string"), "text/xml");
     const sc = doc.querySelector("scene");
     W = +sc.getAttribute("width"); H = +sc.getAttribute("height"); total = +sc.getAttribute("totalTime");
-    $("cv").width = W; $("cv").height = H;
+    $("cv").width = W; $("cv").height = H; oc.width = o2.width = o3.width = W; oc.height = o2.height = o3.height = H;
     baseName = (sc.getAttribute("title") || "preset").replace(/[^\w\-]+/g, "_");
     $("title").textContent = sc.getAttribute("title") || "Foto";
 
     status("Menyiapkan gambar dan musik…");
-    imgs = {}; layers = []; audioLayer = null; const order = [];
+    imgs = {}; layers = []; audioLayer = null; const order = [], vids = {};
     for (const el of kids(sc)) {
       const s = +el.getAttribute("startTime"), e = +el.getAttribute("endTime");
       if (el.tagName === "audio") {
         const nm = mediaName(el.getAttribute("src"));
         if (zip.files[nm]) { aud.src = URL.createObjectURL(new Blob([await zip.files[nm].async("arraybuffer")], { type: "audio/mpeg" })); audioLayer = { s, inT: +el.getAttribute("inTime") || 0 }; }
-      } else if (el.tagName === "shape" && el.getAttribute("fillType") === "media" && el.getAttribute("fillImage")) {
-        const nm = mediaName(el.getAttribute("fillImage"));
-        if (!imgs[nm] && zip.files[nm]) { imgs[nm] = await loadImg(URL.createObjectURL(await zip.files[nm].async("blob"))); order.push(nm); }
-        layers.push({ el, s, e, nm, img: imgs[nm], fx: kids(el).filter((c) => c.tagName === "effect") });
+      } else if (el.tagName === "shape" && el.getAttribute("fillType") === "media" && (el.getAttribute("fillImage") || el.getAttribute("fillVideo"))) {
+        const fx = kids(el).filter((c) => c.tagName === "effect"), base = { el, s, e, fx, blend: el.getAttribute("blending"), inT: +el.getAttribute("inTime") || 0 };
+        if (el.getAttribute("fillVideo")) {
+          const nm = mediaName(el.getAttribute("fillVideo"));
+          if (!vids[nm] && zip.files[nm]) { const v = document.createElement("video"); v.muted = true; v.playsInline = true; v.preload = "auto"; v.src = URL.createObjectURL(new Blob([await zip.files[nm].async("arraybuffer")], { type: "video/mp4" })); vids[nm] = v; }
+          layers.push({ ...base, video: vids[nm] });
+        } else {
+          const nm = mediaName(el.getAttribute("fillImage"));
+          if (!imgs[nm] && zip.files[nm]) { imgs[nm] = await loadImg(URL.createObjectURL(await zip.files[nm].async("blob"))); order.push(nm); }
+          layers.push({ ...base, nm, img: imgs[nm] });
+        }
       }
     }
     const fxCount = {}; doc.querySelectorAll("effect").forEach((f) => { const k = f.getAttribute("id").split(".").pop(); fxCount[k] = (fxCount[k] || 0) + 1; });
-    $("dbgOut").textContent = "Layer foto dirender: " + layers.length + "\nEfek di preset (jumlah):\n" + JSON.stringify(fxCount, null, 1) + "\n\nIsi paket:\n" + names.join("\n");
+    const fxProps = {}; doc.querySelectorAll("effect").forEach((f) => { const k = f.getAttribute("id").split(".").pop(); fxProps[k] = fxProps[k] || kids(f).map((q) => q.getAttribute("name") + "=" + (q.getAttribute("value") ?? "kf")).join(", "); });
+    $("dbgOut").textContent = "Properti tiap efek:\n" + JSON.stringify(fxProps, null, 1) + "\n\nLayer dirender: " + layers.length + "\nEfek di preset (jumlah):\n" + JSON.stringify(fxCount, null, 1) + "\n\nIsi paket:\n" + names.join("\n");
     $("dbg").hidden = false;
     renderSlots(order);
     t = 0; $("view").hidden = false; $("dl").hidden = true; draw();
