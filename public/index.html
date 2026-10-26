@@ -58,7 +58,7 @@ pre{white-space:pre-wrap;word-break:break-all;max-height:220px;overflow:auto;bac
       <h2 id="title">Foto</h2>
       <div class="slots" id="slots"></div>
       <div class="row" style="margin-top:14px"><button class="alt" id="dl" hidden>Unduh preset baru</button></div>
-      <p class="sub" style="margin:12px 0 0;font-size:.85rem">Pratinjau ini meniru posisi, skala, rotasi, transparansi, fade, getar, overlay video, waves, ubin (tile), koreksi warna sederhana, dan musik. Efek lain (blur, dll.) belum dirender, jadi tampilannya tidak persis sama dengan di Alight Motion.</p>
+      <p class="sub" style="margin:12px 0 0;font-size:.85rem">Pratinjau ini meniru posisi, skala, rotasi, transparansi, fade, getar, overlay video, waves, ubin, zoom blur, random displace, koreksi warna, dan musik. Efek lain (motion blur, lens blur, mirror, dll.) belum dirender, jadi tampilannya tidak persis sama dengan di Alight Motion.</p>
     </div>
   </section>
   <details id="dbg" hidden><summary>Info teknis</summary><pre id="dbgOut"></pre></details>
@@ -115,13 +115,15 @@ function num(fx, re, p, def) {
   const v = val(n, p); return v ? v[0] : def;
 }
 function ripple(fx, p, sec, srcCv) {
-  let amp = num(fx, /amp|mag|str|inten|height|size/i, p, 0); if (Math.abs(amp) < .01) return srcCv;
-  if (Math.abs(amp) <= 2) amp *= 30;
-  const fr = num(fx, /freq|wave|count|ring/i, p, 8), ph = num(fx, /phase|evol|speed|time/i, p, 0) + sec * 6;
+  let amp = num(fx, /^strength$/, p, 0); if (Math.abs(amp) < .001) return srcCv;
+  if (Math.abs(amp) <= 2) amp *= 40;
+  const fr = num(fx, /^frequency$/, p, 8), ph = num(fx, /^phase$/, p, 0);
+  const R = num(fx, /^radius$/, p, .8) * Math.hypot(W, H) / 2, fe = Math.max(1, num(fx, /^feather$/, p, .1) * R);
   const cx = W / 2, cy = H / 2, k = 2 * Math.PI * fr / Math.max(W, H);
   const A = srcCv.getContext("2d").getImageData(0, 0, W, H).data, D = new ImageData(W, H), B = D.data;
   for (let y = 0, i = 0; y < H; y++) for (let x = 0; x < W; x++, i += 4) {
-    const dx = x - cx, dy = y - cy, r = Math.sqrt(dx * dx + dy * dy) || 1, o = amp * Math.sin(r * k - ph);
+    const dx = x - cx, dy = y - cy, r = Math.sqrt(dx * dx + dy * dy) || 1;
+    const o = amp * Math.min(1, Math.max(0, (R - r) / fe)) * Math.sin(r * k - ph);
     const sx = Math.min(W - 1, Math.max(0, Math.round(x + dx / r * o))), sy = Math.min(H - 1, Math.max(0, Math.round(y + dy / r * o))), j = (sy * W + sx) * 4;
     B[i] = A[j]; B[i + 1] = A[j + 1]; B[i + 2] = A[j + 2]; B[i + 3] = A[j + 3];
   }
@@ -138,6 +140,25 @@ function tile(fx, p, srcCv) {
     g.drawImage(srcCv, -tw / 2, -th / 2, tw, th); g.restore();
   }
   return o3;
+}
+const o4 = document.createElement("canvas"), o5 = document.createElement("canvas");
+function zoomblur(fx, p, src) {
+  const st = num(fx, /^strength$/, p, 0); if (st <= .001) return src;
+  const g = o4.getContext("2d"), n = 10, mx = Math.min(.6, st <= 1 ? st * .4 : st / 100 * .4);
+  g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, W, H);
+  for (let i = 0; i < n; i++) { const z = 1 + mx * i / (n - 1); g.globalAlpha = 1 / (i + 1); g.save(); g.translate(W / 2, H / 2); g.scale(z, z); g.drawImage(src, -W / 2, -H / 2); g.restore(); }
+  g.globalAlpha = 1; return o4;
+}
+function rdisp(fx, p, src) {
+  const mag = num(fx, /^mag$/, p, 0); if (mag < .5) return src;
+  const ev = num(fx, /^evolution$/, p, 0), seed = num(fx, /^seed$/, p, 0), sc = num(fx, /^scatter$/, p, .5);
+  const g = o5.getContext("2d"), n = 36, h = H / n, step = Math.floor(ev * 6);
+  g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, W, H);
+  for (let i = 0; i < n; i++) {
+    const r = Math.sin((i + 1) * 12.9898 + step * 78.233 + seed * 37.7) * 43758.5453, rr = r - Math.floor(r);
+    g.drawImage(src, 0, i * h, W, h + 1, (rr - .5) * 2 * mag * (.4 + sc), i * h, W, h + 1);
+  }
+  return o5;
 }
 function syncVideo(L, active) {
   const v = L.video; if (!v) return;
@@ -159,7 +180,7 @@ function draw() {
     const tr = ch(L.el, "transform") || L.el, find = (tag) => ch(tr, tag) || ch(L.el, tag);
     const loc = val(find("location"), p) || [W / 2, H / 2], sc = val(find("scale"), p) || [1, 1];
     let rot = (val(find("rotation"), p) || [0])[0], op = (val(find("opacity"), p) || [1])[0]; if (op > 1) op /= 100;
-    let dx = 0, dy = 0, bright = 1, sat = 1, rip = [], til = [];
+    let dx = 0, dy = 0, bright = 1, sat = 1, rip = [], til = [], zb = [], rd = [];
     for (const fx of L.fx) {
       const id = fx.getAttribute("id") || "";
       if (id.endsWith("oscillate3")) {
@@ -173,15 +194,17 @@ function draw() {
         op *= Math.max(0, Math.min(1, sec / i, (dur - sec) / o));
       } else if (id.endsWith("circularripple2")) rip.push(fx);
       else if (id.endsWith("effects.tile")) til.push(fx);
-      else if (id.endsWith("effects.exposure")) { const v = num(fx, /expo|ev|value|amount/i, p, 0); bright *= Math.abs(v) <= 5 ? 2 ** v : 1 + v / 100; }
-      else if (id.endsWith("effects.lift")) { const v = num(fx, /lift|value|amount|shadow/i, p, 0); bright *= Math.abs(v) <= 1 ? 1 + v : 1 + v / 100; }
-      else if (id.endsWith("satvib")) { const v = num(fx, /sat/i, p, 0); sat *= Math.abs(v) <= 1 ? 1 + v : v / 100; }
+      else if (id.endsWith("zoomblur3")) zb.push(fx);
+      else if (id.endsWith("randomdisplace")) rd.push(fx);
+      else if (id.endsWith("effects.exposure")) { const v = num(fx, /^exposure$/, p, 0); bright *= Math.abs(v) <= 5 ? 2 ** v : 1 + v / 100; }
+      else if (id.endsWith("effects.lift")) { bright *= 1 + Math.max(-1, Math.min(1, num(fx, /^fill$/, p, 0))); }
+      else if (id.endsWith("satvib")) { sat *= Math.max(0, 1 + num(fx, /^saturation$/, p, 0)); }
     }
     x.setTransform(1, 0, 0, 1, 0, 0); x.clearRect(0, 0, W, H); x.save();
     x.translate(loc[0] + dx, loc[1] + dy); x.rotate(rot * Math.PI / 180); x.scale(sc[0], sc[1] ?? sc[0]);
     const r = Math.max(W / sw, H / sh), dw = sw * r, dh = sh * r;
     x.beginPath(); x.rect(-W / 2, -H / 2, W, H); x.clip(); x.drawImage(src, -dw / 2, -dh / 2, dw, dh); x.restore();
-    let out = oc; for (const fx of til) out = tile(fx, p, out); for (const fx of rip) out = ripple(fx, p, sec, out);
+    let out = oc; for (const fx of til) out = tile(fx, p, out); for (const fx of rd) out = rdisp(fx, p, out); for (const fx of zb) out = zoomblur(fx, p, out); for (const fx of rip) out = ripple(fx, p, sec, out);
     c.save(); c.globalAlpha = Math.max(0, Math.min(1, op));
     c.globalCompositeOperation = BLEND[L.blend] || "source-over";
     c.filter = (bright !== 1 || sat !== 1) ? `brightness(${Math.max(0, bright)}) saturate(${Math.max(0, sat)})` : "none";
@@ -237,7 +260,7 @@ async function load() {
     doc = new DOMParser().parseFromString(await zip.files[xmlName].async("string"), "text/xml");
     const sc = doc.querySelector("scene");
     W = +sc.getAttribute("width"); H = +sc.getAttribute("height"); total = +sc.getAttribute("totalTime");
-    $("cv").width = W; $("cv").height = H; oc.width = o2.width = o3.width = W; oc.height = o2.height = o3.height = H;
+    $("cv").width = W; $("cv").height = H; oc.width = o2.width = o3.width = o4.width = o5.width = W; oc.height = o2.height = o3.height = o4.height = o5.height = H;
     baseName = (sc.getAttribute("title") || "preset").replace(/[^\w\-]+/g, "_");
     $("title").textContent = sc.getAttribute("title") || "Foto";
 
