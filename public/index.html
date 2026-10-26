@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Preset Player</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+:root{--bg:#eef1f7;--ink:#1b2340;--mute:#5d6685;--line:#cdd3e4;--card:#fff;--hot:#e0307a;--hot-ink:#fff}
+@media (prefers-color-scheme:dark){:root{--bg:#12162a;--ink:#e8ebf7;--mute:#9aa3c4;--line:#2a3150;--card:#1a1f38;--hot:#ff5c9d;--hot-ink:#12162a}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 "Segoe UI",system-ui,sans-serif}
+main{max-width:960px;margin:0 auto;padding:28px 18px 60px}
+h1{font-size:2rem;margin:0 0 4px;letter-spacing:-.02em}
+.sub{color:var(--mute);margin:0 0 22px}
+.bar{display:flex;gap:8px;flex-wrap:wrap}
+input[type=url]{flex:1 1 280px;padding:12px 14px;border:1.5px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink);font:inherit}
+button,.btn{padding:12px 18px;border:0;border-radius:10px;background:var(--hot);color:var(--hot-ink);font:inherit;font-weight:600;cursor:pointer}
+button.alt,.btn.alt{background:transparent;color:var(--ink);border:1.5px solid var(--line)}
+button:disabled{opacity:.5;cursor:wait}
+:focus-visible{outline:3px solid var(--hot);outline-offset:2px}
+#status{margin:14px 0;color:var(--mute);min-height:1.5em}
+#status.err{color:var(--hot)}
+.grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px;margin-top:8px}
+@media(max-width:720px){.grid{grid-template-columns:1fr}}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px}
+.panel h2{font-size:1.05rem;margin:0 0 10px}
+canvas{width:100%;height:auto;border-radius:10px;background:#000;display:block}
+.assets{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:8px}
+.asset{border:2px solid var(--line);border-radius:10px;padding:4px;background:var(--bg);cursor:pointer;text-align:center;font-size:.7rem;color:var(--mute);overflow:hidden}
+.asset img{width:100%;aspect-ratio:1;object-fit:contain;border-radius:6px;display:block}
+.asset[aria-pressed=true]{border-color:var(--hot)}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+details{margin-top:14px;color:var(--mute);font-size:.85rem}
+pre{white-space:pre-wrap;word-break:break-all;max-height:240px;overflow:auto;background:var(--bg);padding:10px;border-radius:8px}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<main>
+  <h1>Preset Player</h1>
+  <p class="sub">Tempel link preset Alight Creative, lalu ganti foto di dalamnya.</p>
+  <div class="bar">
+    <input id="link" type="url" placeholder="https://alightcreative.com/am/share/..." aria-label="Link preset">
+    <button id="go">Muat preset</button>
+  </div>
+  <div id="status" role="status"></div>
+
+  <section class="grid" id="view" hidden>
+    <div class="panel">
+      <h2 id="title">Pratinjau</h2>
+      <canvas id="cv" width="640" height="640"></canvas>
+    </div>
+    <div class="panel">
+      <h2>Foto di dalam preset</h2>
+      <div class="assets" id="assets"></div>
+      <p id="hint" class="sub" style="margin:10px 0 0">Pilih satu foto, lalu ganti dengan fotomu.</p>
+      <div class="row">
+        <label class="btn" id="pickLbl" hidden>Ganti foto<input id="file" type="file" accept="image/*" hidden></label>
+        <button class="alt" id="dl" hidden>Unduh preset baru</button>
+      </div>
+    </div>
+  </section>
+
+  <details id="dbg" hidden><summary>Info teknis paket</summary><pre id="dbgOut"></pre></details>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const IMG = /\.(png|jpe?g|webp)$/i;
+let zip, assets = [], selected = null, thumbImg = null, baseName = "preset";
+
+function status(msg, err) { const s = $("status"); s.textContent = msg; s.className = err ? "err" : ""; }
+
+// Ambil nilai pertama dari JSON yang key-nya cocok pola
+function pick(obj, re, test = (v) => typeof v === "string") {
+  let out;
+  (function walk(o) {
+    if (out || !o || typeof o !== "object") return;
+    for (const [k, v] of Object.entries(o)) {
+      if (re.test(k) && test(v)) { out = v; return; }
+      walk(v);
+    }
+  })(obj);
+  return out;
+}
+
+async function getJson(url) {
+  const r = await fetch(url);
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || "Gagal (" + r.status + ")");
+  return j;
+}
+
+function drawBase() {
+  const cv = $("cv"), c = cv.getContext("2d");
+  c.fillStyle = "#000"; c.fillRect(0, 0, cv.width, cv.height);
+  if (thumbImg) {
+    const s = Math.min(cv.width / thumbImg.width, cv.height / thumbImg.height);
+    const w = thumbImg.width * s, h = thumbImg.height * s;
+    c.drawImage(thumbImg, (cv.width - w) / 2, (cv.height - h) / 2, w, h);
+  }
+}
+
+function loadImg(src) {
+  return new Promise((ok, no) => { const i = new Image(); i.crossOrigin = "anonymous"; i.onload = () => ok(i); i.onerror = no; i.src = src; });
+}
+
+function renderAssets() {
+  const box = $("assets"); box.innerHTML = "";
+  assets.forEach((a, i) => {
+    const b = document.createElement("button");
+    b.className = "asset"; b.type = "button";
+    b.setAttribute("aria-pressed", selected === i);
+    b.innerHTML = '<img alt=""><span></span>';
+    b.querySelector("img").src = a.url;
+    b.querySelector("span").textContent = a.name.split("/").pop();
+    b.onclick = () => { selected = i; renderAssets(); $("pickLbl").hidden = false; $("hint").textContent = "Terpilih: " + a.name.split("/").pop(); };
+    box.appendChild(b);
+  });
+}
+
+async function load() {
+  const link = $("link").value.trim();
+  if (!link) return status("Tempel link preset dulu.", true);
+  $("go").disabled = true; $("view").hidden = true; $("dbg").hidden = true;
+  try {
+    status("Membaca info preset…");
+    const detail = await getJson("/api/detail?url=" + encodeURIComponent(link));
+    const title = pick(detail, /title|name/i) || "Preset";
+    const thumb = pick(detail, /thumb|image|cover|preview/i, (v) => typeof v === "string" && /^https?:/.test(v));
+    baseName = title.replace(/[^\w\-]+/g, "_");
+    $("title").textContent = title;
+    thumbImg = thumb ? await loadImg(thumb).catch(() => null) : null;
+
+    status("Mengunduh paket preset…");
+    const r = await fetch("/api/download?url=" + encodeURIComponent(link));
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || "Gagal mengunduh (" + r.status + ")");
+    zip = await JSZip.loadAsync(await r.arrayBuffer());
+
+    assets = []; selected = null;
+    const names = Object.keys(zip.files).filter((n) => !zip.files[n].dir);
+    for (const n of names.filter((n) => IMG.test(n))) {
+      const blob = await zip.files[n].async("blob");
+      assets.push({ name: n, url: URL.createObjectURL(blob) });
+    }
+    $("dbgOut").textContent = "Detail API:\n" + JSON.stringify(detail, null, 2).slice(0, 1500) + "\n\nIsi paket (" + names.length + " file):\n" + names.join("\n");
+    $("dbg").hidden = false;
+    $("view").hidden = false; $("pickLbl").hidden = true; $("dl").hidden = true;
+    $("hint").textContent = assets.length ? "Pilih satu foto, lalu ganti dengan fotomu." : "Tidak ada foto di paket ini. Cek “Info teknis paket”.";
+    drawBase(); renderAssets();
+    status("Preset dimuat.");
+  } catch (e) { status(e.message, true); }
+  $("go").disabled = false;
+}
+
+$("go").onclick = load;
+$("link").addEventListener("keydown", (e) => e.key === "Enter" && load());
+
+$("file").onchange = async (e) => {
+  const f = e.target.files[0]; if (!f || selected === null) return;
+  const a = assets[selected];
+  const ext = a.name.split(".").pop().toLowerCase();
+  const mime = ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : "image/jpeg";
+  // Ubah ke format & ukuran asli aset supaya preset tetap valid
+  const orig = await loadImg(a.url);
+  const c = document.createElement("canvas"); c.width = orig.width; c.height = orig.height;
+  const x = c.getContext("2d"), np = await loadImg(URL.createObjectURL(f));
+  const s = Math.max(c.width / np.width, c.height / np.height);
+  x.drawImage(np, (c.width - np.width * s) / 2, (c.height - np.height * s) / 2, np.width * s, np.height * s);
+  const blob = await new Promise((ok) => c.toBlob(ok, mime, 0.92));
+  zip.file(a.name, blob);
+  a.url = URL.createObjectURL(blob);
+  // Pratinjau: tampilkan foto baru di kanvas
+  thumbImg = await loadImg(a.url); drawBase();
+  renderAssets(); $("dl").hidden = false;
+  status("Foto diganti. Unduh preset baru untuk diimpor ke Alight Motion.");
+  e.target.value = "";
+};
+
+$("dl").onclick = async () => {
+  status("Menyusun file…");
+  const blob = await zip.generateAsync({ type: "blob", compression: "DEFLATE" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = baseName + ".alightmotion"; a.click();
+  status("File diunduh.");
+};
+</script>
+</body>
+</html>
